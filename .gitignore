@@ -30,3 +30,9 @@
 *.exe
 *.out
 *.app
+wild_driver
+
+# Others
+.vscode
+*.wild
+*.svg
