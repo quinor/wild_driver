@@ -27,7 +27,7 @@ int main(int argc, char** argv)
     bool cut = false;
     int lift_angle = 0;
     int speed = 0;
-    float points_per_arch = 100;
+    float points_per_arch = 50;
     float min_step_size = 0.5;
 
     // IO options
@@ -191,7 +191,7 @@ int main(int argc, char** argv)
                     float2 b = {pt[2], svg_size.y-pt[3]};
                     float2 c = {pt[4], svg_size.y-pt[5]};
                     float2 d = {pt[6], svg_size.y-pt[7]};
-                    float2 x0 = d, x1 = 3*c-3*d, x2 = 3*b - 6*c + 3*d, x3 = a - 3*b + 3*c - d;
+                    float2 x0 = a, x1 = 3*b-3*a, x2 = 3*c - 6*b + 3*a, x3 = d - 3*c + 3*b - a;
 
                     move_to(transform(a), !dry_run);
                     float2 prev = a;
