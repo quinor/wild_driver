@@ -29,6 +29,7 @@ int main(int argc, char** argv)
     int speed = 0;
     float points_per_arch = 50;
     float min_step_size = 0.5;
+    bool order_paths;
 
     // IO options
     app.add_option("input,-i,--input", in_fname, "Input svg file.")
@@ -49,7 +50,7 @@ int main(int argc, char** argv)
 
     app.add_option<float2, std::pair<float, float>>(
         "--translate", translate,
-            "Translate after scaling (ie. to move the plot on the work surface).")
+        "Translate after scaling (ie. to move the plot on the work surface).")
         ->default_str("0 0");
 
     // plotting options
@@ -70,6 +71,9 @@ int main(int argc, char** argv)
         ->check(CLI::Range(1, 37));
 
     // rasterization options
+    app.add_flag("--order_paths", order_paths, "Optimize ordering of rendered paths to save on "
+        "free (tool up) travel length. Warning: may slow down for over 5000 paths rendered (O(n^2) complexity).");
+
     app.add_option<float, int>("--points_per_arch", points_per_arch, "Number of points per arch in rasterization. "
         "Most likely don't touch.")
         ->default_val(50)
@@ -115,6 +119,96 @@ int main(int argc, char** argv)
         return -1;
     }
 
+    std::vector<std::vector<float2>> paths;
+
+    // draw the box in the box mode
+    if (box)
+    {
+        printf("drawing the box outline of the plot only\n");
+        std::vector<float2>& pln = paths.emplace_back();
+
+        pln.emplace_back(beg);
+        pln.emplace_back(float2{beg.x, end.y});
+        pln.emplace_back(end);
+        pln.emplace_back(float2{end.x, beg.y});
+        pln.emplace_back(beg);
+    }
+    // otherwise rasterize the svg
+    else
+    {
+        printf("rasterizing plot...\n");
+        for (NSVGshape *shape = svg->shapes; shape != NULL; shape = shape->next)
+        {
+            for (NSVGpath *path = shape->paths; path != NULL; path = path->next)
+            {
+                // move to the beginning of the path
+                float2 first = {path->pts[0], svg_size.y-path->pts[1]};
+                std::vector<float2>& pln = paths.emplace_back();
+                pln.emplace_back(transform(first));
+
+                for (int n = 0; n < path->npts-1; n += 3)
+                {
+                    float* pt = &path->pts[n*2];
+                    float2 a = {pt[0], svg_size.y-pt[1]};
+                    float2 b = {pt[2], svg_size.y-pt[3]};
+                    float2 c = {pt[4], svg_size.y-pt[5]};
+                    float2 d = {pt[6], svg_size.y-pt[7]};
+                    float2 x0 = a, x1 = 3*b-3*a, x2 = 3*c - 6*b + 3*a, x3 = d - 3*c + 3*b - a;
+
+                    pln.emplace_back(transform(a));
+                    float2 prev = a;
+                    for (int i=1; i<points_per_arch; i++)
+                    {
+                        float p = i/points_per_arch;
+                        float2 point = x0 + p*(x1 + p*(x2 + p*x3));
+                        if (linalg::length2(point-prev) > min_step_size*min_step_size)
+                        {
+                            pln.emplace_back(transform(point));
+                            prev=point;
+                        }
+                    }
+                    pln.emplace_back(transform(d));
+                }
+            }
+        }
+    }
+
+    nsvgDelete(svg);
+
+    if (order_paths)
+    {
+        printf("reordering paths...\n");
+        // intentionally ignore the copy from paths to new_paths and then back
+        // it doesn't matter too much performance-wise. TODO: maybe fix.
+        std::vector<std::vector<float2>> new_paths;
+        std::vector<bool> visited(paths.size(), false);
+        visited[0] = true;
+        new_paths.push_back(paths[0]);
+        float2 last = new_paths[0].back();
+        for (size_t i=1; i<paths.size(); i++)
+        {
+            int best = -1;
+            float best_len = 0;
+            for (size_t j=0; j<paths.size(); j++)
+            {
+                if (visited[j])
+                    continue;
+                float new_len = linalg::length2(last-paths[j][0]);
+                if (best == -1 || new_len < best_len)
+                {
+                    best = j;
+                    best_len = new_len;
+                }
+            }
+            last = paths[best].back();
+            new_paths.push_back(paths[best]);
+            visited[best] = true;
+        }
+        paths = new_paths;
+    }
+
+    // writing the .wild file
+
     FILE* output = fopen(out_fname.c_str(), "w");
     if (output == nullptr)
     {
@@ -140,87 +234,50 @@ int main(int argc, char** argv)
     // speed selection. Default of 120mm/s for cutting and 300mm/s (max) for drawing.
     fprintf(output, ":7%d\r\n", speed == 0 ? (cut ? 15 : 37) : speed);
 
+    printf("using the %s\n", cut ? "cutter" : "pen");
+    printf("the tool is %s\n", dry_run ? "lifted" : "lowered");
+    printf("number of paths rendered: %lu\n", paths.size());
+
     float2 cur = {0,0};
     float total_up = 0, total_down = 0;
     int points_count = 0;
 
-    auto move_to = [&](float2 vec, bool draw=false) -> void {
-        // for stats
-        float delta = linalg::length(vec-cur);
-        cur = vec;
-        if (draw)
-            total_down += delta;
-        else
-            total_up += delta;
-        points_count += 1;
-
-        // actual plotter commands
-        int x = vec.x*STEPS_PER_MM;
-        int y = vec.y*STEPS_PER_MM;
-        fprintf(output, "%c%d,%d\r\n", draw ? 'D' : 'U', x, y);
-    };
-
-    printf("the tool is %s\n", dry_run ? "lifted" : "lowered");
-
-    // draw the box in the box mode
-    if (box)
+    for (auto& pln : paths)
     {
-        printf("drawing the box outline of the plot only\n");
-        move_to(beg, false);
-        move_to({beg.x, end.y}, !dry_run);
-        move_to(end, !dry_run);
-        move_to({end.x, beg.y}, !dry_run);
-        move_to(beg, !dry_run);
-    }
-    // otherwise rasterize the svg
-    else
-    {
-        printf("rasterizing plot...\n");
-        for (NSVGshape *shape = svg->shapes; shape != NULL; shape = shape->next)
+        bool first = true;
+        for (auto vec : pln)
         {
-            for (NSVGpath *path = shape->paths; path != NULL; path = path->next)
-            {
-                // move to the beginning of the path
-                float2 first = {path->pts[0], svg_size.y-path->pts[1]};
-                move_to(transform(first), false);
+            bool draw = !first && !dry_run;
+            first = false;
 
-                for (int n = 0; n < path->npts-1; n += 3)
-                {
-                    float* pt = &path->pts[n*2];
-                    float2 a = {pt[0], svg_size.y-pt[1]};
-                    float2 b = {pt[2], svg_size.y-pt[3]};
-                    float2 c = {pt[4], svg_size.y-pt[5]};
-                    float2 d = {pt[6], svg_size.y-pt[7]};
-                    float2 x0 = a, x1 = 3*b-3*a, x2 = 3*c - 6*b + 3*a, x3 = d - 3*c + 3*b - a;
+            // for stats
+            float delta = linalg::length(vec-cur);
+            cur = vec;
+            if (draw)
+                total_down += delta;
+            else
+                total_up += delta;
+            points_count += 1;
 
-                    move_to(transform(a), !dry_run);
-                    float2 prev = a;
-                    for (int i=1; i<points_per_arch; i++)
-                    {
-                        float p = i/points_per_arch;
-                        float2 point = x0 + p*(x1 + p*(x2 + p*x3));
-                        if (linalg::length2(point-prev) > min_step_size*min_step_size)
-                        {
-                            move_to(transform(point), !dry_run);
-                            prev=point;
-                        }
-                    }
-                    move_to(transform(d), !dry_run);
-                }
-            }
+            // actual plotter commands
+            int x = vec.x*STEPS_PER_MM;
+            int y = vec.y*STEPS_PER_MM;
+            fprintf(output, "%c%d,%d\r\n", draw ? 'D' : 'U', x, y);
         }
     }
 
     // supposedly a buffer at the end is needed for the plotter not to stop moving. TODO test
-    for (int i=0; i<64; i++)
-        move_to(beg, false);
+    {
+        int x = beg.x*STEPS_PER_MM, y = beg.y*STEPS_PER_MM;
+        for (int i=0; i<64; i++)
+            fprintf(output, "U%d,%d\r\n", x, y);
+    }
 
     printf("done!\n");
     printf("stats:\n");
     printf("    points count: %d\n", points_count);
     printf("    total path length: %.2fmm\n", total_down);
     printf("    total free travel length: %.2fmm\n", total_up);
-    nsvgDelete(svg);
 
     return 0;
 }

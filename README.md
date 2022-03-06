@@ -2,7 +2,7 @@
 Simple SVG driver for a Wild TA-10 drawing/cutting plotter. For the purposes of Technologia Incognita Wild TA-10 plotter (https://wiki.techinc.nl/Wild_TA-10).
 
 ## Build instructions
-Use `make` to build. The binary is called `wild_driver`. Only things required to build is Make and a C++11-compatible version of gcc.
+Use `make` to build. The binary is called `wild_driver`. Only things required to build is Make and a C++17-compatible version of gcc.
 
 ## Usage instructions
 
@@ -62,6 +62,7 @@ Options:
   --cut                                 Select cutting mode (initialize the cutting head).
   --lift_angle INT=20                   For cutting only. Threshold (in degrees) after which cutting head will be lifted before changing directions. 0 disables this feature.
   --speed INT:INT in [1 - 37]           Plotting/cutting speed in x*8mm/s.
+  --order_paths                         Optimize ordering of rendered paths to save on free (tool up) travel length. Warning: may slow down for over 1000 paths rendered (O(n^2) complexity).
   --points_per_arch INT:POSITIVE=50     Number of points per arch in rasterization. Most likely don't touch.
   --min_step_size FLOAT:POSITIVE=0.5    Minimal step size for the rasterization process in mm. Smaller values will increase resolution, but may slow down the plotting speed due to rs232 transfer rate limits.
 ```
