@@ -125,7 +125,8 @@ int main(int argc, char** argv)
     if (box)
     {
         printf("drawing the box outline of the plot only\n");
-        std::vector<float2>& pln = paths.emplace_back();
+        paths.emplace_back();
+        std::vector<float2>& pln = paths.back();
 
         pln.emplace_back(beg);
         pln.emplace_back(float2{beg.x, end.y});
@@ -143,7 +144,8 @@ int main(int argc, char** argv)
             {
                 // move to the beginning of the path
                 float2 first = {path->pts[0], svg_size.y-path->pts[1]};
-                std::vector<float2>& pln = paths.emplace_back();
+                paths.emplace_back();
+                std::vector<float2>& pln = paths.back();
                 pln.emplace_back(transform(first));
 
                 for (int n = 0; n < path->npts-1; n += 3)
