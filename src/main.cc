@@ -140,6 +140,8 @@ int main(int argc, char** argv)
         printf("rasterizing plot...\n");
         for (NSVGshape *shape = svg->shapes; shape != NULL; shape = shape->next)
         {
+            if (!(shape->flags & NSVG_FLAGS_VISIBLE))
+                continue;
             for (NSVGpath *path = shape->paths; path != NULL; path = path->next)
             {
                 // move to the beginning of the path
@@ -158,16 +160,11 @@ int main(int argc, char** argv)
                     float2 x0 = a, x1 = 3*b-3*a, x2 = 3*c - 6*b + 3*a, x3 = d - 3*c + 3*b - a;
 
                     pln.emplace_back(transform(a));
-                    float2 prev = a;
                     for (int i=1; i<points_per_arch; i++)
                     {
                         float p = i/points_per_arch;
                         float2 point = x0 + p*(x1 + p*(x2 + p*x3));
-                        if (linalg::length2(point-prev) > min_step_size*min_step_size)
-                        {
-                            pln.emplace_back(transform(point));
-                            prev=point;
-                        }
+                        pln.emplace_back(transform(point));
                     }
                     pln.emplace_back(transform(d));
                 }
@@ -246,11 +243,16 @@ int main(int argc, char** argv)
 
     for (auto& pln : paths)
     {
+        float2 prev = {};
         bool first = true;
         for (auto vec : pln)
         {
             bool draw = !first && !dry_run;
             first = false;
+
+            if (!first && linalg::length2(prev-vec) < min_step_size*min_step_size)
+                continue;
+            prev = vec;
 
             // for stats
             float delta = linalg::length(vec-cur);
