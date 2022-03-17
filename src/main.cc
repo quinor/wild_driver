@@ -29,7 +29,8 @@ int main(int argc, char** argv)
     int speed = 0;
     float points_per_arch = 50;
     float min_step_size = 0.5;
-    bool order_paths;
+    bool order_paths = false;
+    bool visualize = false;
 
     // IO options
     app.add_option("input,-i,--input", in_fname, "Input svg file.")
@@ -85,6 +86,10 @@ int main(int argc, char** argv)
         ->default_val(0.5)
         ->check(CLI::PositiveNumber);
 
+    // misc options
+    app.add_flag("--visualize", visualize, "Visualize the path as an svg file.");
+
+
     CLI11_PARSE(app, argc, argv);
 
     if (box)
@@ -137,6 +142,20 @@ int main(int argc, char** argv)
     // otherwise rasterize the svg
     else
     {
+        std::function<void(std::vector<float2>&, float2, float2, float2, float2, int)> rasterize_bezier =
+        [&](std::vector<float2>& pln, float2 a, float2 b, float2 c, float2 d, int n) -> void
+        {
+            float2 p = (a+b)*0.5f, q=(b+c)*0.5f, r=(c+d)*0.5f;
+            float2 k = (p+q)*0.5f, l = (q+r)*0.5f;
+            float2 x = (k+l)*0.5f;
+            if (linalg::length2(transform(d)-transform(a)) < min_step_size*min_step_size || n > 10)
+                return;
+            rasterize_bezier(pln, a, p, k, x, n+1);
+            pln.emplace_back(transform(x));
+            rasterize_bezier(pln, x, l, r, d, n+1);
+        };
+
+
         printf("rasterizing plot...\n");
         for (NSVGshape *shape = svg->shapes; shape != NULL; shape = shape->next)
         {
@@ -145,10 +164,8 @@ int main(int argc, char** argv)
             for (NSVGpath *path = shape->paths; path != NULL; path = path->next)
             {
                 // move to the beginning of the path
-                float2 first = {path->pts[0], svg_size.y-path->pts[1]};
                 paths.emplace_back();
                 std::vector<float2>& pln = paths.back();
-                pln.emplace_back(transform(first));
 
                 for (int n = 0; n < path->npts-1; n += 3)
                 {
@@ -157,15 +174,10 @@ int main(int argc, char** argv)
                     float2 b = {pt[2], svg_size.y-pt[3]};
                     float2 c = {pt[4], svg_size.y-pt[5]};
                     float2 d = {pt[6], svg_size.y-pt[7]};
-                    float2 x0 = a, x1 = 3*b-3*a, x2 = 3*c - 6*b + 3*a, x3 = d - 3*c + 3*b - a;
 
-                    pln.emplace_back(transform(a));
-                    for (int i=1; i<points_per_arch; i++)
-                    {
-                        float p = i/points_per_arch;
-                        float2 point = x0 + p*(x1 + p*(x2 + p*x3));
-                        pln.emplace_back(transform(point));
-                    }
+                    if (n == 0)
+                        pln.emplace_back(transform(a));
+                    rasterize_bezier(pln, a, b, c, d, 0);
                     pln.emplace_back(transform(d));
                 }
             }
@@ -204,6 +216,42 @@ int main(int argc, char** argv)
             visited[best] = true;
         }
         paths = new_paths;
+    }
+
+    if (visualize)
+    {
+        printf("saving visualization as vis.svg\n");
+        FILE* vis = fopen("vis.svg", "w");
+
+        float2 size = (end-beg);
+        float yyy = end.y + beg.y;
+
+        fprintf(vis, "<?xml version=\"1.0\" standalone=\"no\"?>\n");
+        fprintf(vis, "<!DOCTYPE svg PUBLIC \"-//W3C//DTD SVG 1.1//EN\"\n");
+        fprintf(vis, "\"http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd\">\n");
+        fprintf(vis, "<svg width=\"%fmm\" height=\"%fmm\"\n", size.x, size.y);
+        fprintf(vis, "xmlns=\"http://www.w3.org/2000/svg\" version=\"1.1\"\n");
+        fprintf(vis, "viewBox=\"%f %f %f %f\">\n", beg.x, beg.y, end.x, end.y);
+
+        for (size_t i=0; i<paths.size(); i++)
+        {
+            if (i != 0)
+            {
+                float2 p1 = paths[i-1].back();
+                float2 p2 = paths[i].front();
+                fprintf(vis, "<polyline points=\"");
+                fprintf(vis, "%f,%f ", p1.x, yyy-p1.y);
+                fprintf(vis, "%f,%f ", p2.x, yyy-p2.y);
+                fprintf(vis, "\" fill=\"none\" stroke=\"red\" stroke-width=\"0.1\"/>\n");
+            }
+            fprintf(vis, "<polyline points=\"");
+            for (auto p : paths[i])
+                fprintf(vis, "%f,%f ", p.x, yyy-p.y);
+            fprintf(vis, "\" fill=\"none\" stroke=\"black\" stroke-width=\"0.1\"/>\n");
+        }
+
+        fprintf(vis, "</svg>\n");
+        fclose(vis);
     }
 
     // writing the .wild file
@@ -276,6 +324,8 @@ int main(int argc, char** argv)
         for (int i=0; i<64; i++)
             fprintf(output, "U%d,%d\r\n", x, y);
     }
+
+    fclose(output);
 
     printf("done!\n");
     printf("stats:\n");
