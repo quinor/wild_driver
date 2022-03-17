@@ -29,8 +29,8 @@ int main(int argc, char** argv)
     int speed = 0;
     float points_per_arch = 50;
     float min_step_size = 0.5;
-    bool order_paths = false;
-    bool visualize = false;
+    bool order_paths = true;
+    bool visualize = true;
 
     // IO options
     app.add_option("input,-i,--input", in_fname, "Input svg file.")
@@ -72,7 +72,7 @@ int main(int argc, char** argv)
         ->check(CLI::Range(1, 37));
 
     // rasterization options
-    app.add_flag("--order_paths", order_paths, "Optimize ordering of rendered paths to save on "
+    app.add_flag("!--no_order_paths", order_paths, "Optimize ordering of rendered paths to save on "
         "free (tool up) travel length. Warning: may slow down for over 5000 paths rendered (O(n^2) complexity).");
 
     app.add_option<float, int>("--points_per_arch", points_per_arch, "Number of points per arch in rasterization. "
@@ -87,7 +87,7 @@ int main(int argc, char** argv)
         ->check(CLI::PositiveNumber);
 
     // misc options
-    app.add_flag("--visualize", visualize, "Visualize the path as an svg file.");
+    app.add_flag("!--no_visualize", visualize, "Visualize the path as an svg file.");
 
 
     CLI11_PARSE(app, argc, argv);
