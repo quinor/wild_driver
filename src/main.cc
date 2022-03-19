@@ -124,10 +124,8 @@ bool hatch_impl (
 
     std::vector<float2> pts;
 
-    bool ticktock = 0;
     for (float y=ymin; y<ymax; y+=hatch_density)
     {
-        ticktock = !ticktock;
         while (it1 != sections1.end() && it1->first.y <= y)
             active.insert(*(it1++));
 
@@ -141,8 +139,7 @@ bool hatch_impl (
                 s.dir
             );
         std::sort(edges.begin(), edges.end());
-        if (ticktock)
-            std::reverse(edges.begin(), edges.end());
+        std::reverse(edges.begin(), edges.end());
         int level = 0;
         float beg;
         for (auto& p : edges)
@@ -349,10 +346,19 @@ int main(int argc, char** argv)
             float2 p = (a+b)*0.5f, q=(b+c)*0.5f, r=(c+d)*0.5f;
             float2 k = (p+q)*0.5f, l = (q+r)*0.5f;
             float2 x = (k+l)*0.5f;
-            if (linalg::length2(transform(d)-transform(a)) < min_step_size*min_step_size || n > 10)
+            if (
+                fabs(a.x + c.x - b.x - b.x) +
+                fabs(a.y + c.y - b.y - b.y) +
+                fabs(b.x + d.x - c.x - c.x) +
+                fabs(b.y + d.y - c.y - c.y)
+                < min_step_size * 0.25
+                || n > 10
+            )
+            {
+                pln.emplace_back(transform(x));
                 return;
+            }
             rasterize_bezier(pln, a, p, k, x, n+1);
-            pln.emplace_back(transform(x));
             rasterize_bezier(pln, x, l, r, d, n+1);
         };
 
@@ -493,32 +499,32 @@ int main(int argc, char** argv)
     // .wild file preamble
 
     // choosing tool
-    fprintf(output, ":8%d\r\n", cut ? 1 : 3);
+    fprintf(output, ":8%d\r", cut ? 1 : 3);
     // circle resolution - default is double (enhanced) resolution
     // probably not strictly needed (this driver doesn't emit circles)
-    fprintf(output, ":32\r\n");
+    fprintf(output, ":32\r");
     // lifting/lowering time in ms
-    fprintf(output, ":525,25\r\n");
+    fprintf(output, ":525,25\r");
     // "Auto pen-lift at angular discontinuities"
-    fprintf(output, ":E%d00\r\n", cut ? (lift_angle <= 0 ? -20 : lift_angle) : -20);
-    // number of cutting head chosen. Hardcoded to 2.
-    fprintf(output, "P2\r\n");
+    fprintf(output, ":E%d00\r", cut ? (lift_angle <= 0 ? -20 : lift_angle) : -20);
+    // index of tool head chosen. Hardcoded to 2.
+    fprintf(output, "P2\r");
     // move to 0, 0 coordinate first
-    fprintf(output, "U0,0\r\n");
+    fprintf(output, "U0,0\r");
     // speed selection. Default of 120mm/s for cutting and 300mm/s (max) for drawing.
-    fprintf(output, ":7%d\r\n", speed == 0 ? (cut ? 15 : 37) : speed);
+    fprintf(output, ":7%d\r", speed == 0 ? (cut ? 15 : 37) : speed);
 
     printf("using the %s\n", cut ? "cutter" : "pen");
     printf("the tool is %s\n", dry_run ? "lifted" : "lowered");
     printf("number of paths rendered: %lu\n", paths.size());
 
     float2 cur = {0,0};
+    int lastx = 0, lasty = 0;
     float total_up = 0, total_down = 0;
     int points_count = 0;
 
     for (auto& pln : paths)
     {
-        float2 prev = {};
         bool first = true;
         for (size_t i=0; i<pln.pts.size(); i++)
         {
@@ -526,9 +532,8 @@ int main(int argc, char** argv)
             bool draw = !first && !dry_run && (pln.dash <= (i&1));
             first = false;
 
-            if (!first && linalg::length2(prev-vec) < min_step_size*min_step_size)
+            if (!first && linalg::length2(cur-vec) < min_step_size*min_step_size)
                 continue;
-            prev = vec;
 
             // for stats
             float delta = linalg::length(vec-cur);
@@ -542,7 +547,18 @@ int main(int argc, char** argv)
             // actual plotter commands
             int x = vec.x*STEPS_PER_MM;
             int y = vec.y*STEPS_PER_MM;
-            fprintf(output, "%c%d,%d\r\n", draw ? 'D' : 'U', x, y);
+            int dx = x-lastx;
+            int dy = y-lasty;
+            if (dx > 8191 || dx < -8192 || dy > 8191 || dy < -8192)
+                fprintf(output, "%c%d,%d\r", draw ? 'D' : 'U', x, y);
+            else
+            {
+                char xu = (dx>>7)&0x7f, xl = dx&0x7f, yu = (dy>>7)&0x7f, yl = dy&0x7f;
+                fprintf(output, "%c%c%c%c%c\r", draw ? 'S' : 'T', xu|0x80, xl|0x80, yu|0x80, yl|0x80);
+            }
+
+            lastx = x;
+            lasty = y;
         }
     }
 
@@ -550,7 +566,7 @@ int main(int argc, char** argv)
     {
         int x = beg.x*STEPS_PER_MM, y = beg.y*STEPS_PER_MM;
         for (int i=0; i<64; i++)
-            fprintf(output, "U%d,%d\r\n", x, y);
+            fprintf(output, "U%d,%d\r", x, y);
     }
 
     fclose(output);
