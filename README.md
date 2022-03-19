@@ -76,3 +76,9 @@ Options:
   --hatch_density FLOAT:POSITIVE=2      Distance (in mm) between two consecutive hatch lines.
   --no_visualize{false}                 Visualize the path as an svg file.
 ```
+
+## Example outputs (visualization)
+
+![TechInc logo](/readme_res/techinc_logo.svg)
+
+![TechInc logo, with hatching](/readme_res/techinc_logo_hatching.svg)
