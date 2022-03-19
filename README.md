@@ -2,7 +2,7 @@
 Simple SVG driver for a Wild TA-10 drawing/cutting plotter. For the purposes of Technologia Incognita Wild TA-10 plotter (https://wiki.techinc.nl/Wild_TA-10).
 
 ## Build instructions
-Use `make` to build. The binary is called `wild_driver`. Only things required to build is Make and a C++17-compatible version of gcc.
+Use `make` to build. The binary is called `wild_driver`. Only things required to build is Make and a C++14-compatible version of gcc.
 
 ## Usage instructions
 
