@@ -351,7 +351,7 @@ int main(int argc, char** argv)
                 fabs(a.y + c.y - b.y - b.y) +
                 fabs(b.x + d.x - c.x - c.x) +
                 fabs(b.y + d.y - c.y - c.y)
-                < min_step_size * 0.25
+                < min_step_size * 0.5
                 || n > 10
             )
             {
@@ -562,10 +562,10 @@ int main(int argc, char** argv)
         }
     }
 
-    // supposedly a buffer at the end is needed for the plotter not to stop moving. TODO test
+    // A buffer at the end is needed for the plotter not to stop moving. Weird.
     {
         int x = beg.x*STEPS_PER_MM, y = beg.y*STEPS_PER_MM;
-        for (int i=0; i<64; i++)
+        for (int i=0; i<256; i++)
             fprintf(output, "U%d,%d\r", x, y);
     }
 
