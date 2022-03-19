@@ -4,11 +4,210 @@
 #include "external/nanosvg.h"
 
 #include <cstdio>
+#include <cmath>
+#include <random>
 
 using float2 = linalg::vec<float, 2>;
+using mat2 = linalg::mat<float, 2, 2>;
 
 // 50 steps per mm - as per Wild TA-10's documentation
 const float STEPS_PER_MM = 50;
+
+
+struct Section {
+    float2 first;
+    float2 second;
+    int dir;
+};
+
+bool operator< (const Section& a, const Section& b)
+{
+    if (a.first.x != b.first.x)
+        return a.first.x < b.first.x;
+
+    if (a.second.x != b.second.x)
+        return a.second.x < b.second.x;
+
+    if (a.first.y != b.first.y)
+        return a.first.y < b.first.y;
+
+    if (a.second.y != b.second.y)
+        return a.second.y < b.second.y;
+
+    return a.dir < b.dir;
+}
+
+struct Path {
+    bool dash = false;
+    std::vector<float2> pts;
+};
+
+
+
+bool hatch_impl (
+    std::vector<Path>& paths,
+    size_t idx_beg,
+    size_t idx_end,
+    NSVGshape* shape,
+    float hatch_density,
+    bool order_paths,
+    Path& out
+)
+{
+    std::vector<Section> sections1, sections2;
+
+    static std::mt19937 gen(0);
+    std::uniform_real_distribution<> rd(0.f, 1.f);
+    float angle = std::acos(-1) * rd(gen); // pi * rand
+    mat2 rot = {
+        {cosf(angle), -sinf(angle)},
+        {sinf(angle), cosf(angle)},
+    };
+    mat2 unrot = {
+        {cosf(-angle), -sinf(-angle)},
+        {sinf(-angle), cosf(-angle)},
+    };
+
+
+    for (size_t i=idx_beg; i < idx_end; i++)
+    {
+        Path& cur = paths[i];
+        for (size_t j=1; j<cur.pts.size(); j++)
+        {
+            float2 p1 = linalg::mul(rot, cur.pts[j-1]);
+            float2 p2 = linalg::mul(rot, cur.pts[j]);
+            if (p1.y == p2.y)
+                continue;
+            int dir = 1;
+            if (p1.y > p2.y)
+            {
+                std::swap(p1, p2);
+                dir = -1;
+            }
+
+            sections1.push_back({p1, p2, dir});
+            sections2.push_back({p1, p2, dir});
+        }
+    }
+
+    if (sections1.size() == 0)
+        return false;
+
+    float ymin, ymax;
+    ymin = sections1[0].first.y;
+    ymax = sections1[0].first.y;
+    for (auto& section: sections1)
+    {
+        ymin = std::min(ymin, section.first.y);
+        ymin = std::min(ymin, section.second.y);
+        ymax = std::max(ymax, section.first.y);
+        ymax = std::max(ymax, section.second.y);
+    }
+
+
+    std::sort(sections1.begin(), sections1.end(), [](
+        const Section& a, const Section& b) -> bool
+        { return a.first.y < b.first.y; }
+    );
+
+    std::sort(sections2.begin(), sections2.end(), [](
+        const Section& a, const Section& b) -> bool
+        { return a.second.y < b.second.y; }
+    );
+
+    std::set<Section> active;
+
+    auto it1 = sections1.begin();
+    auto it2 = sections2.begin();
+
+    out.dash = true;
+
+    std::vector<float2> pts;
+
+    bool ticktock = 0;
+    for (float y=ymin; y<ymax; y+=hatch_density)
+    {
+        ticktock = !ticktock;
+        while (it1 != sections1.end() && it1->first.y <= y)
+            active.insert(*(it1++));
+
+        while (it2 != sections2.end() && it2->second.y <= y)
+            active.erase(*(it2++));
+
+        std::vector<std::pair<float, int>> edges;
+        for (auto& s : active)
+            edges.emplace_back(
+                (y - s.first.y) / (s.second.y - s.first.y) * (s.second.x - s.first.x) + s.first.x,
+                s.dir
+            );
+        std::sort(edges.begin(), edges.end());
+        if (ticktock)
+            std::reverse(edges.begin(), edges.end());
+        int level = 0;
+        float beg;
+        for (auto& p : edges)
+            if (
+                shape->fillRule == NSVG_FILLRULE_EVENODD
+                ? (level&1) == 0
+                : level == 0
+            )
+            {
+                beg = p.first;
+                level += p.second;
+            }
+            else
+            {
+                level += p.second;
+                if (
+                    shape->fillRule == NSVG_FILLRULE_EVENODD
+                    ? (level&1) == 0
+                    : level == 0
+                )
+                {
+                    pts.push_back(linalg::mul(unrot, {beg, y}));
+                    pts.push_back(linalg::mul(unrot, {p.first, y}));
+                }
+            }
+    }
+
+    if (pts.size() == 0)
+        return false;
+
+    if (!order_paths)
+    {
+        out.pts = pts;
+        return true;
+    }
+
+    std::vector<bool> visited(pts.size()/2, false);
+    visited[0] = true;
+    out.pts.push_back(pts[0]);
+    out.pts.push_back(pts[1]);
+
+    float2 last = out.pts.back();
+    for (size_t i=1; i<pts.size()/2; i++)
+    {
+        int best = -1;
+        float best_len = 0;
+        for (size_t j=0; j<pts.size()/2; j++)
+        {
+            if (visited[j])
+                continue;
+            float new_len = linalg::length2(last-pts[2*j]);
+            if (best == -1 || new_len < best_len)
+            {
+                best = j;
+                best_len = new_len;
+            }
+        }
+        last = pts[2*best+1];
+        out.pts.push_back(pts[2*best]);
+        out.pts.push_back(pts[2*best+1]);
+        visited[best] = true;
+    }
+
+    return true;
+}
 
 
 int main(int argc, char** argv)
@@ -19,7 +218,7 @@ int main(int argc, char** argv)
     std::string in_fname;
     int dpi = 96;
     std::string out_fname;
-    float scale;
+    float scale = 1;
     float2 pre_translate={0,0};
     float2 translate={0,0};
     bool box = false;
@@ -27,9 +226,10 @@ int main(int argc, char** argv)
     bool cut = false;
     int lift_angle = 0;
     int speed = 0;
-    float points_per_arch = 50;
     float min_step_size = 0.5;
     bool order_paths = true;
+    bool hatch = false;
+    float hatch_density = 0;
     bool visualize = true;
 
     // IO options
@@ -75,15 +275,16 @@ int main(int argc, char** argv)
     app.add_flag("!--no_order_paths", order_paths, "Optimize ordering of rendered paths to save on "
         "free (tool up) travel length. Warning: may slow down for over 5000 paths rendered (O(n^2) complexity).");
 
-    app.add_option<float, int>("--points_per_arch", points_per_arch, "Number of points per arch in rasterization. "
-        "Most likely don't touch.")
-        ->default_val(50)
-        ->check(CLI::PositiveNumber);
-
     app.add_option<float>("--min_step_size", min_step_size, "Minimal step size for the rasterization "
         "process in mm. Smaller values will increase resolution, but may slow down the plotting "
         "speed due to rs232 transfer rate limits.")
         ->default_val(0.5)
+        ->check(CLI::PositiveNumber);
+
+    app.add_flag("--hatch", hatch, "Hatch the inside of (filled in) svg shapes");
+
+    app.add_option<float>("--hatch_density", hatch_density, "Distance (in mm) between two consecutive hatch lines.")
+        ->default_val(2)
         ->check(CLI::PositiveNumber);
 
     // misc options
@@ -124,14 +325,14 @@ int main(int argc, char** argv)
         return -1;
     }
 
-    std::vector<std::vector<float2>> paths;
+    std::vector<Path> paths;
 
     // draw the box in the box mode
     if (box)
     {
         printf("drawing the box outline of the plot only\n");
         paths.emplace_back();
-        std::vector<float2>& pln = paths.back();
+        std::vector<float2>& pln = paths.back().pts;
 
         pln.emplace_back(beg);
         pln.emplace_back(float2{beg.x, end.y});
@@ -156,16 +357,18 @@ int main(int argc, char** argv)
         };
 
 
-        printf("rasterizing plot...\n");
+        printf("rasterizing plot%s...\n", hatch ? " and hatching" : "");
         for (NSVGshape *shape = svg->shapes; shape != NULL; shape = shape->next)
         {
             if (!(shape->flags & NSVG_FLAGS_VISIBLE))
                 continue;
+
+            size_t idx_beg = paths.size();
+
             for (NSVGpath *path = shape->paths; path != NULL; path = path->next)
             {
-                // move to the beginning of the path
                 paths.emplace_back();
-                std::vector<float2>& pln = paths.back();
+                std::vector<float2>& pln = paths.back().pts;
 
                 for (int n = 0; n < path->npts-1; n += 3)
                 {
@@ -181,6 +384,14 @@ int main(int argc, char** argv)
                     pln.emplace_back(transform(d));
                 }
             }
+
+            if (shape->fill.type == NSVG_PAINT_NONE || !hatch)
+                continue;
+
+            size_t idx_end = paths.size();
+            paths.emplace_back();
+            if (!hatch_impl(paths, idx_beg, idx_end, shape, hatch_density, order_paths, paths.back()))
+                paths.pop_back();
         }
     }
 
@@ -191,11 +402,11 @@ int main(int argc, char** argv)
         printf("reordering paths...\n");
         // intentionally ignore the copy from paths to new_paths and then back
         // it doesn't matter too much performance-wise. TODO: maybe fix.
-        std::vector<std::vector<float2>> new_paths;
+        std::vector<Path> new_paths;
         std::vector<bool> visited(paths.size(), false);
         visited[0] = true;
         new_paths.push_back(paths[0]);
-        float2 last = new_paths[0].back();
+        float2 last = new_paths[0].pts.back();
         for (size_t i=1; i<paths.size(); i++)
         {
             int best = -1;
@@ -204,14 +415,14 @@ int main(int argc, char** argv)
             {
                 if (visited[j])
                     continue;
-                float new_len = linalg::length2(last-paths[j][0]);
+                float new_len = linalg::length2(last-paths[j].pts[0]);
                 if (best == -1 || new_len < best_len)
                 {
                     best = j;
                     best_len = new_len;
                 }
             }
-            last = paths[best].back();
+            last = paths[best].pts.back();
             new_paths.push_back(paths[best]);
             visited[best] = true;
         }
@@ -237,17 +448,33 @@ int main(int argc, char** argv)
         {
             if (i != 0)
             {
-                float2 p1 = paths[i-1].back();
-                float2 p2 = paths[i].front();
+                float2 p1 = paths[i-1].pts.back();
+                float2 p2 = paths[i].pts.front();
                 fprintf(vis, "<polyline points=\"");
                 fprintf(vis, "%f,%f ", p1.x, yyy-p1.y);
                 fprintf(vis, "%f,%f ", p2.x, yyy-p2.y);
                 fprintf(vis, "\" fill=\"none\" stroke=\"red\" stroke-width=\"0.1\"/>\n");
             }
-            fprintf(vis, "<polyline points=\"");
-            for (auto p : paths[i])
-                fprintf(vis, "%f,%f ", p.x, yyy-p.y);
-            fprintf(vis, "\" fill=\"none\" stroke=\"black\" stroke-width=\"0.1\"/>\n");
+            Path& cur = paths[i];
+            if (cur.dash)
+            {
+                for (size_t j=1; j<cur.pts.size(); j++)
+                {
+                    float2 p1 = cur.pts[j-1];
+                    float2 p2 = cur.pts[j];
+                    fprintf(vis, "<polyline points=\"");
+                    fprintf(vis, "%f,%f ", p1.x, yyy-p1.y);
+                    fprintf(vis, "%f,%f ", p2.x, yyy-p2.y);
+                    fprintf(vis, "\" fill=\"none\" stroke=\"%s\" stroke-width=\"0.1\"/>\n", (j&1) ? "black" : "red");
+                }
+            }
+            else
+            {
+                fprintf(vis, "<polyline points=\"");
+                for (auto p : cur.pts)
+                    fprintf(vis, "%f,%f ", p.x, yyy-p.y);
+                fprintf(vis, "\" fill=\"none\" stroke=\"black\" stroke-width=\"0.1\"/>\n");
+            }
         }
 
         fprintf(vis, "</svg>\n");
@@ -293,9 +520,10 @@ int main(int argc, char** argv)
     {
         float2 prev = {};
         bool first = true;
-        for (auto vec : pln)
+        for (size_t i=0; i<pln.pts.size(); i++)
         {
-            bool draw = !first && !dry_run;
+            float2 vec = pln.pts[i];
+            bool draw = !first && !dry_run && (pln.dash <= (i&1));
             first = false;
 
             if (!first && linalg::length2(prev-vec) < min_step_size*min_step_size)
