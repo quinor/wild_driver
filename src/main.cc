@@ -565,7 +565,7 @@ int main(int argc, char** argv)
     // A buffer at the end is needed for the plotter not to stop moving. Weird.
     {
         int x = beg.x*STEPS_PER_MM, y = beg.y*STEPS_PER_MM;
-        for (int i=0; i<256; i++)
+        for (int i=0; i<1024; i++)
             fprintf(output, "U%d,%d\r", x, y);
     }
 
