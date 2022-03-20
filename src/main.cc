@@ -258,7 +258,7 @@ int main(int argc, char** argv)
     app.add_flag("--dry_run,!--no_dry_run", dry_run, "Dry run (have the tool lifted "
         "when drawing). Off by default.");
 
-    app.add_flag("--cut", dry_run, "Select cutting mode (initialize the cutting head).");
+    app.add_flag("--cut", cut, "Select cutting mode (initialize the cutting head).");
 
     app.add_option<int>("--lift_angle", lift_angle, "For cutting only. Threshold (in degrees) "
         "after which cutting head will be lifted before changing directions. 0 disables "
@@ -549,7 +549,7 @@ int main(int argc, char** argv)
             int y = vec.y*STEPS_PER_MM;
             int dx = x-lastx;
             int dy = y-lasty;
-            if (dx > 8191 || dx < -8192 || dy > 8191 || dy < -8192 || true)
+            if (dx > 8191 || dx < -8192 || dy > 8191 || dy < -8192)
                 fprintf(output, "%c%d,%d\r", draw ? 'D' : 'U', x, y);
             else
             {
