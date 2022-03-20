@@ -549,7 +549,7 @@ int main(int argc, char** argv)
             int y = vec.y*STEPS_PER_MM;
             int dx = x-lastx;
             int dy = y-lasty;
-            if (dx > 8191 || dx < -8192 || dy > 8191 || dy < -8192)
+            if (dx > 8191 || dx < -8192 || dy > 8191 || dy < -8192 || true)
                 fprintf(output, "%c%d,%d\r", draw ? 'D' : 'U', x, y);
             else
             {
