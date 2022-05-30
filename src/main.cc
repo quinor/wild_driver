@@ -405,6 +405,8 @@ int main(int argc, char** argv)
     bool first = true;
     for (auto color : all_colors)
     {
+        NSVGcolor unpacked = {.color=color};
+
         NSVGNamedColor best = nsvg__colors[0];
         for (size_t i=0; i<ncolors; i++)
         {
@@ -412,22 +414,24 @@ int main(int argc, char** argv)
             if (color_distance(color, best.color) > color_distance(color, cur.color))
                 best = cur;
         }
+        char hexname[8];
+        sprintf(hexname, "#%02x%02x%02x", unpacked.r, unpacked.g, unpacked.b);
+
         color_names[color] = best;
-        color_enabled[color] = color_key_set.count(best.name);
-        NSVGcolor unpacked = {.color=color};
-        fprintf(text_out, "    rgb(%3d, %3d, %3d) #%02x%02x%02x %s\n",
+        color_enabled[color] = (color_key_set.count(best.name) + color_key_set.count(hexname) > 0);
+        fprintf(text_out, "    rgb(%3d, %3d, %3d) #%02x%02x%02x %16s %s\n",
             unpacked.r, unpacked.g, unpacked.b,
             unpacked.r, unpacked.g, unpacked.b,
-            best.name
+            best.name, (color_enabled[color] || !color_key) ? "(enabled)" : ""
         );
         fprintf(json_out, "%s\n", first ? "" : ",");
         first = false;
         fprintf(json_out,
             "        { \"rgb\": { \"r\": %d, \"g\": %d, \"b\": %d }, "
-            "\"hex\": \"#%02x%02x%02x\", \"name\": \"%s\"}",
+            "\"hex\": \"#%02x%02x%02x\", \"name\": \"%s\", \"enabled\": %s }",
             unpacked.r, unpacked.g, unpacked.b,
             unpacked.r, unpacked.g, unpacked.b,
-            best.name
+            best.name, (color_enabled[color] || !color_key) ? "true" : "false"
         );
     }
 
