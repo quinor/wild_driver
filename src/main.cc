@@ -244,6 +244,7 @@ int main(int argc, char** argv)
     std::string in_fname;
     int dpi = 96;
     std::string out_fname;
+    std::string vis_fname;
     float scale = 1;
     float2 pre_translate={0,0};
     float2 translate={0,0};
@@ -269,6 +270,9 @@ int main(int argc, char** argv)
 
     app.add_option("output,-o,--output", out_fname, "Output plotter commands file.")
         ->default_val("out.wild");
+
+    app.add_option("--vis", vis_fname, "Visualization svg file.")
+        ->default_val("vis.svg");
 
     app.add_flag("--json", json, "Instead of regular stdout, output machine-readable json");
 
@@ -577,8 +581,8 @@ int main(int argc, char** argv)
 
     if (visualize)
     {
-        fprintf(text_out, "saving visualization as vis.svg\n");
-        FILE* vis = fopen("vis.svg", "w");
+        fprintf(text_out, "saving visualization as %s\n", vis_fname.c_str());
+        FILE* vis = fopen(vis_fname.c_str(), "w");
 
         float2 size = (end-beg);
         float yyy = end.y + beg.y;
