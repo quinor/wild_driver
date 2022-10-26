@@ -515,7 +515,7 @@ int main(int argc, char** argv)
                 ? shape->stroke.color
                 : shape->fill.color;
 
-            if (!no_outline && (!color_key || color_enabled[outline_color]))
+            if (!no_outline && (!color_key || color_enabled[remove_a(outline_color)]))
             {
                 for (NSVGpath *path = shape->paths; path != NULL; path = path->next)
                 {
@@ -539,7 +539,7 @@ int main(int argc, char** argv)
             }
 
             unsigned int fill_color = shape->fill.color;
-            if (shape->fill.type != NSVG_PAINT_COLOR || !hatch || (color_key && !color_enabled[fill_color]))
+            if (shape->fill.type != NSVG_PAINT_COLOR || !hatch || (color_key && !color_enabled[remove_a(fill_color)]))
                 continue;
 
             size_t idx_end = paths.size();
