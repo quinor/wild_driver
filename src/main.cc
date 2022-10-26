@@ -32,6 +32,15 @@ typedef union NSVGcolor {
 const float STEPS_PER_MM = 50;
 
 
+uint32_t remove_a(uint32_t x)
+{
+    NSVGcolor c;
+    c.color = x;
+    c.a = 0;
+    return c.color;
+}
+
+
 int color_distance (uint32_t c1p, uint32_t c2p)
 {
     NSVGcolor c1 = {.color=c1p};
@@ -398,9 +407,11 @@ int main(int argc, char** argv)
         if (!(shape->flags & NSVG_FLAGS_VISIBLE))
             continue;
         if (shape->stroke.type == NSVG_PAINT_COLOR)
-            all_colors.insert(shape->stroke.color);
+        {
+            all_colors.insert(remove_a(shape->stroke.color));
+        }
         if (shape->fill.type == NSVG_PAINT_COLOR)
-            all_colors.insert(shape->fill.color);
+            all_colors.insert(remove_a(shape->fill.color));
     }
 
     fprintf(text_out, "color names detected from the image:\n");
