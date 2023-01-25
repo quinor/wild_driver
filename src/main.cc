@@ -492,7 +492,7 @@ int main(int argc, char** argv)
                 fabs(a.y + c.y - b.y - b.y) +
                 fabs(b.x + d.x - c.x - c.x) +
                 fabs(b.y + d.y - c.y - c.y)
-                < min_step_size * 0.1
+                < min_step_size * 0.25
                 || n > 10
             )
             {
