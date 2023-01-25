@@ -328,7 +328,7 @@ int main(int argc, char** argv)
     app.add_option<float>("--min_step_size", min_step_size, "Minimal step size for the rasterization "
         "process in mm. Smaller values will increase resolution, but may slow down the plotting "
         "speed due to rs232 transfer rate limits.")
-        ->default_val(0.5)
+        ->default_val(1)
         ->check(CLI::PositiveNumber);
 
     app.add_flag("--no_outline", no_outline, "Don't trace outlines of shapes");
@@ -492,7 +492,7 @@ int main(int argc, char** argv)
                 fabs(a.y + c.y - b.y - b.y) +
                 fabs(b.x + d.x - c.x - c.x) +
                 fabs(b.y + d.y - c.y - c.y)
-                < min_step_size * 0.5
+                < min_step_size * 0.1
                 || n > 10
             )
             {
@@ -672,7 +672,7 @@ int main(int argc, char** argv)
     // move to 0, 0 coordinate first
     fprintf(output, "U0,0\r");
     // speed selection. Default of 120mm/s for cutting and 300mm/s (max) for drawing.
-    fprintf(output, ":7%d\r", speed == 0 ? (cut ? 15 : 37) : speed);
+    fprintf(output, ":7%d,37\r", speed == 0 ? (cut ? 15 : 37) : speed);
 
     fprintf(text_out, "using the %s\n", cut ? "cutter" : "pen");
     fprintf(text_out, "the tool is %s\n", dry_run ? "lifted" : "lowered");
