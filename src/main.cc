@@ -264,7 +264,7 @@ int main(int argc, char** argv)
     bool cut = false;
     int lift_angle = 0;
     int speed = 0;
-    float min_step_size = 0.5;
+    float min_step_size = 1;
     bool order_paths = true;
     bool no_outline = false;
     bool hatch = false;
@@ -496,7 +496,12 @@ int main(int argc, char** argv)
                 || n > 10
             )
             {
-                pln.emplace_back(transform(x));
+                // assumes pln is not empty which is supposed to be true - the beginning of a polyline is already in
+                auto prev = pln.back();
+                auto next = transform(x);
+
+                if (linalg::length2(next-prev) > min_step_size * min_step_size)
+                    pln.emplace_back(transform(x));
                 return;
             }
             rasterize_bezier(pln, a, p, k, x, n+1);
@@ -688,9 +693,6 @@ int main(int argc, char** argv)
             float2 vec = pln.pts[i];
             bool draw = !first && !dry_run && (pln.dash <= (i&1));
             first = false;
-
-            if (!first && linalg::length2(cur-vec) < min_step_size*min_step_size)
-                continue;
 
             // for stats
             float delta = linalg::length(vec-cur);
