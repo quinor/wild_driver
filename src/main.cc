@@ -252,6 +252,7 @@ int main(int argc, char** argv)
     // * make svg.beg.x and svg.end.y be the origin
     // * flip the y axis
     // * apply the translate
+    json_output("translate", translate);
     for (auto& p : plt)
     {
         p.first.x = p.first.x - svg.beg.x + translate.x;
