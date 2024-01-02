@@ -147,7 +147,7 @@ int main(int argc, char** argv)
         fprintf(vis, "\"http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd\">\n");
         fprintf(vis, "<svg xmlns=\"http://www.w3.org/2000/svg\" version=\"1.1\"\n");
         fprintf(vis, "viewBox=\"%f %f %f %f\">\n", svg.beg.x, svg.beg.y, size.x, size.y);
-        fprintf(vis, "<rect width=\"100%%\" height=\"100%%\" fill=\"#def2ff\"/>");
+        fprintf(vis, "<rect width=\"100%%\" height=\"100%%\" fill=\"#def2ff\" stroke=\"black\" stroke-dasharray=\"1\" stroke-width=\"0.1\"/>");
 
         float2 last = svg.beg;
         for (auto& shape : svg.shapes)
