@@ -128,12 +128,6 @@ int main(int argc, char** argv)
     if (colors_only)
         return 0;
 
-    if (svg.beg.x < 0 || svg.beg.y < 0 || svg.end.x < 0 || svg.end.y < 0)
-        json_fail("Attempting to draw in area with negative coordinates.", {
-            {"begin", svg.beg},
-            {"end", svg.end}
-        });
-
     if (visualize)
     {
         json_log("Saving visualization to file.", vis_fname);
