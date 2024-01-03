@@ -290,9 +290,6 @@ Image::Image(
     json_log("Parsed svg of size (mm)", end);
     json_output("input_size", {{"begin", beg}, {"end", end}, {"size", end-beg}});
 
-    // add the default color - black
-    add_color(0);
-
     for (NSVGshape *shape = svg->shapes; shape != NULL; shape = shape->next)
     {
         if (!(shape->flags & NSVG_FLAGS_VISIBLE))
@@ -322,6 +319,10 @@ Image::Image(
             shape->stroke.type == NSVG_PAINT_COLOR
             ? cur.outline_color
             : cur.hatching_color;
+
+        // add the default color - 0 - if it's actually used
+        if (cur.outline_color == 0 || cur.hatching_color == 0)
+            add_color(0);
 
         if (colors_only)
             continue;
