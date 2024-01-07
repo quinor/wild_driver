@@ -28,7 +28,7 @@ int main(int argc, char** argv)
     bool cut = false;
     int lift_angle = 0;
     int speed = 0;
-    float min_step_size = 1;
+    float min_step_size = 0.5;
     bool no_outline = false;
     bool hatch = false;
     float hatch_density = 0;
@@ -87,7 +87,7 @@ int main(int argc, char** argv)
     app.add_option<float>("--min_step_size", min_step_size, "Minimal step size for the rasterization "
         "process in mm. Smaller values will increase resolution, but may slow down the plotting "
         "speed due to rs232 transfer rate limits.")
-        ->default_val(1)
+        ->default_val(0.5)
         ->check(CLI::PositiveNumber);
 
     app.add_flag("--no_outline", no_outline, "Don't trace outlines of shapes");
@@ -201,11 +201,11 @@ int main(int argc, char** argv)
     if (box)
     {
         json_log("Tracing the bounding box.");
-        plt.emplace_back(svg.beg, 0);
         plt.emplace_back(float2{svg.beg.x, svg.end.y}, 0);
         plt.emplace_back(svg.end, 0);
         plt.emplace_back(float2{svg.end.x, svg.beg.y}, 0);
         plt.emplace_back(svg.beg, 0);
+        plt.emplace_back(float2{svg.beg.x, svg.end.y}, 0);
     }
     else
     {
