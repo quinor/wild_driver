@@ -202,7 +202,7 @@ int main(int argc, char** argv)
     {
         json_log("Tracing the bounding box.");
         plt.emplace_back(svg.beg, 0);
-        plt.emplace_back(float2{svg.beg.y, svg.end.x}, 0);
+        plt.emplace_back(float2{svg.beg.x, svg.end.y}, 0);
         plt.emplace_back(svg.end, 0);
         plt.emplace_back(float2{svg.end.x, svg.beg.y}, 0);
         plt.emplace_back(svg.beg, 0);
